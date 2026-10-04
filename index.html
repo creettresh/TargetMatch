@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="uk">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TargetProximity</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="card">
+      <h1>Перевірка цілей</h1>
+      <p class="lede">
+        Точки інтересу + радіус → перевірка, чи цілі противника потрапляють
+        у зону. MGRS і WGS84 розпізнаються автоматично.
+      </p>
+
+      <section class="batch">
+        <div class="batch-form">
+          <label for="poi">Точки інтересу (до 10)</label>
+          <textarea
+            id="poi"
+            rows="6"
+            spellcheck="false"
+            placeholder="33TWN0838825205&#10;47.180291, 15.110711"
+          ></textarea>
+
+          <div class="radius-toggle" role="group" aria-label="Радіус перевірки">
+            <button type="button" class="radius-option" data-radius="0.5">
+              0.5 км
+            </button>
+            <button
+              type="button"
+              class="radius-option is-active"
+              data-radius="1"
+            >
+              1 км
+            </button>
+          </div>
+
+          <p id="poi-warning" class="error" hidden></p>
+        </div>
+
+        <div class="batch-result">
+          <p id="poi-placeholder" class="placeholder">
+            Точки інтересу з'являться тут
+          </p>
+
+          <div id="poi-table-wrap" hidden>
+            <table id="poi-table">
+              <thead>
+                <tr>
+                  <th>MGRS</th>
+                  <th>Широта</th>
+                  <th>Довгота</th>
+                  <th>Дії</th>
+                </tr>
+              </thead>
+              <tbody id="poi-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <hr />
+
+      <section class="batch">
+        <div class="batch-form">
+          <label for="targets">Цілі противника</label>
+          <textarea
+            id="targets"
+            rows="8"
+            spellcheck="false"
+            placeholder="Вставте список координат (MGRS або WGS84) — по одній на рядок або колонкою"
+          ></textarea>
+
+          <div class="actions">
+            <button id="check" type="button">Перевірити цілі</button>
+          </div>
+
+          <p id="targets-warning" class="error" hidden></p>
+        </div>
+
+        <div class="batch-result">
+          <p id="hits-placeholder" class="placeholder">
+            Тут з'являться цілі, що потрапили в радіус
+          </p>
+
+          <div id="hits-table-wrap" hidden>
+            <table id="hits-table">
+              <thead>
+                <tr>
+                  <th>MGRS</th>
+                  <th>Широта</th>
+                  <th>Довгота</th>
+                  <th>Дії</th>
+                </tr>
+              </thead>
+              <tbody id="hits-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="vendor/mgrs.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
