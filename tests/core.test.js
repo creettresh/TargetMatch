@@ -93,6 +93,17 @@ describe("convertOne — зворотна конвертація (WGS84 → MGRS
     assert.equal(result.source, "latlon");
   });
 
+  test("крапка з комою як роздільник — те саме, що й у extractCoordinateTokens", function () {
+    // Регресія: extractCoordinateTokens() вважає ";" валідним роздільником
+    // у вільному тексті (parseFreeform), тож convertOne() має розуміти
+    // те саме, інакше знайдений токен зі ";" провалював би конвертацію.
+    var result = TargetMatch.convertOne("46.656216; 30.791123");
+    assert.equal(result.ok, true);
+    assert.equal(result.source, "latlon");
+    assert.ok(Math.abs(result.lat - 46.656216) < 1e-6);
+    assert.ok(Math.abs(result.lon - 30.791123) < 1e-6);
+  });
+
   test("зайві пробіли навколо роздільника й по краях", function () {
     var result = TargetMatch.convertOne("  50.4501  ,   30.5234  ");
     assert.equal(result.ok, true);
@@ -222,6 +233,14 @@ describe("selectPoi — ліміт точок інтересу (MAX_POI = 10)", 
     assert.deepEqual(selection.badRaws, ["гарбадж"]);
   });
 
+  test("badDetails дублює badRaws, але з причиною помилки (convertOne().error)", function () {
+    var rows = TargetMatch.parseLines("50.4501, 30.5234\nгарбадж");
+    var selection = TargetMatch.selectPoi(rows, TargetMatch.MAX_POI);
+    assert.equal(selection.badDetails.length, 1);
+    assert.equal(selection.badDetails[0].raw, "гарбадж");
+    assert.equal(selection.badDetails[0].error, TargetMatch.INVALID_MGRS);
+  });
+
   test("невалідний рядок ПІСЛЯ 10-ї позиції не потрапляє в badRaws (не розглядається)", function () {
     var lines = [];
     for (var i = 0; i < 10; i++) {
@@ -282,6 +301,15 @@ describe("findHits — перевірка влучання цілей у рад�
     assert.deepEqual(result.badRaws, ["гарбадж"]);
   });
 
+  test("badDetails для цілей несе ту саму причину, що й convertOne().error", function () {
+    var poiRow = TargetMatch.convertOne("50.4501, 30.5234");
+    var targetRows = TargetMatch.parseLines("50.4510, 30.5240\nгарбадж");
+    var result = TargetMatch.findHits([poiRow], targetRows, 1);
+    assert.equal(result.badDetails.length, 1);
+    assert.equal(result.badDetails[0].raw, "гарбадж");
+    assert.equal(result.badDetails[0].error, TargetMatch.INVALID_MGRS);
+  });
+
   test("однаковий набір точок — різні радіуси дають різний результат", function () {
     // Ціль рівно за 0.7 км на схід від точки інтересу (екватор, щоб
     // відстань обчислювалась за точною замкненою формулою, без похибки).
@@ -334,5 +362,146 @@ describe("findHits — перевірка влучання цілей у рад�
       var result = TargetMatch.findHits([poi], targetRows, radiusKm);
       assert.equal(result.hits.length, 0);
     });
+  });
+});
+
+describe("parseFreeform — вільний текст для цілей (міста, дужки, CSV/Excel-вставка)", function () {
+  test("простий рядок з однією координатою — як і parseLines", function () {
+    var rows = TargetMatch.parseFreeform("33TWN0838825205");
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].converted.ok, true);
+    assert.equal(rows[0].converted.source, "mgrs");
+  });
+
+  test("'Місто - (MGRS)' — витягує координату з дужок, ігноруючи назву міста", function () {
+    var rows = TargetMatch.parseFreeform("Харків - (33TWN0838825205)");
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].converted.ok, true);
+    assert.equal(rows[0].converted.mgrs, "33TWN0838825205");
+  });
+
+  test("'Місто - lat, lon' — витягує WGS84-пару з тексту", function () {
+    var rows = TargetMatch.parseFreeform("Одеса - 46.482526, 30.723309");
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].converted.ok, true);
+    assert.ok(Math.abs(rows[0].converted.lat - 46.482526) < 1e-6);
+    assert.ok(Math.abs(rows[0].converted.lon - 30.723309) < 1e-6);
+  });
+
+  test("кілька координат в одному рядку через кому/крапку з комою — усі знаходяться", function () {
+    var rows = TargetMatch.parseFreeform(
+      "Харків - (33TWN0838825205), Одеса - 46.482526, 30.723309; Львів - (34UDA1748079493)"
+    );
+    assert.equal(rows.length, 3);
+    rows.forEach(function (r) {
+      assert.equal(r.converted.ok, true, "мало розпізнатись: " + JSON.stringify(r));
+    });
+  });
+
+  test("CSV/Excel-вставка колонкою (tab-розділювач, 'місто\\tкоордината')", function () {
+    var text = "Харків\t33TWN0838825205\nОдеса\t46.482526, 30.723309";
+    var rows = TargetMatch.parseFreeform(text);
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].converted.ok, true);
+    assert.equal(rows[1].converted.ok, true);
+  });
+
+  // Регресія: той самий MGRS-з-пробілами формат, що вже працював для
+  // точок інтересу (parseLines), спочатку НЕ розпізнавався тут узагалі.
+  test("MGRS з пробілами (як військовий запис '37U CR 01497 41584') розпізнається, як і в точках інтересу", function () {
+    var spaced = TargetMatch.parseFreeform("37U CR 01497 41584");
+    var plain = TargetMatch.convertOne("37UCR0149741584");
+    assert.equal(spaced.length, 1);
+    assert.equal(spaced[0].converted.ok, true);
+    assert.equal(spaced[0].converted.mgrs, plain.mgrs);
+    assert.ok(Math.abs(spaced[0].converted.lat - plain.lat) < 1e-9);
+    assert.ok(Math.abs(spaced[0].converted.lon - plain.lon) < 1e-9);
+  });
+
+  // Регресія №2, небезпечніша за першу: перша спроба виправити пробіли
+  // в MGRS обмежувала кожну половину цифр до 5 символів (бо "стандартний"
+  // запис — рівні половинки 5+5). Нерівний людський розподіл типу
+  // "0169 941807" (4+6) тоді тихо "впізнавався" як ОКРЕМИЙ, коротший і
+  // менш точний MGRS (лише перша половина), замість явної помилки —
+  // тобто повертав ІНШУ, неправильну координату без жодного попередження.
+  // Правильна поведінка: все одно розпізнати весь рядок цифр цілком.
+  test("нерівний розподіл цифр пробілом (4+6) НЕ обрізає координату мовчки", function () {
+    var rows = TargetMatch.parseFreeform("37U CR 0169 941807");
+    var full = TargetMatch.convertOne("37UCR0169941807");
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].converted.ok, true);
+    assert.equal(
+      rows[0].converted.mgrs,
+      full.mgrs,
+      "мало розпізнати ВЕСЬ рядок цифр, а не обрізати до першої половини"
+    );
+  });
+
+  test("рядок без жодної координати — повністю йде в помилки, не зникає мовчки", function () {
+    var rows = TargetMatch.parseFreeform("просто текст без координат");
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].converted.ok, false);
+    assert.equal(rows[0].raw, "просто текст без координат");
+  });
+
+  test("порожні рядки пропускаються, дублікати координат не видаляються", function () {
+    var text = "33TWN0838825205\n\n   \n33TWN0838825205";
+    var rows = TargetMatch.parseFreeform(text);
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].converted.ok, true);
+    assert.equal(rows[1].converted.ok, true);
+    assert.equal(rows[0].converted.mgrs, rows[1].converted.mgrs);
+  });
+
+  test("змішаний рядок: одна валідна координата + один невалідний токен-схожий на MGRS", function () {
+    // "11ZZZ99" виглядає як MGRS (цифри+3 букви+цифри), але таких зон/квадратів
+    // не існує — має провалитись у mgrs.toPoint і піти в помилки окремо.
+    var rows = TargetMatch.parseFreeform(
+      "Точка А - (33TWN0838825205), Точка Б - 11ZZZ99"
+    );
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].converted.ok, true);
+    assert.equal(rows[1].converted.ok, false);
+  });
+});
+
+describe("extractCoordinateTokens — пошук координат-підрядків у довільному тексті", function () {
+  test("повертає підрядки в порядку появи в тексті", function () {
+    var tokens = TargetMatch.extractCoordinateTokens(
+      "A: 33TWN0838825205, B: 46.482526, 30.723309"
+    );
+    assert.equal(tokens.length, 2);
+    assert.equal(tokens[0], "33TWN0838825205");
+    assert.equal(tokens[1], "46.482526, 30.723309");
+  });
+
+  test("не плутає MGRS-цифри з десятковою WGS84-парою (немає крапки → не WGS84)", function () {
+    var tokens = TargetMatch.extractCoordinateTokens("33TWN0838825205");
+    assert.equal(tokens.length, 1);
+    assert.equal(tokens[0], "33TWN0838825205");
+  });
+
+  test("текст без жодного схожого на координату підрядка — порожній результат", function () {
+    var tokens = TargetMatch.extractCoordinateTokens("Харків, Одеса, Львів");
+    assert.equal(tokens.length, 0);
+  });
+});
+
+describe("explainUnrecognizedLine — підказка, чому рядок точки інтересу не прийнявся", function () {
+  test("дві координати в одному рядку через кому — підказує розбити на рядки", function () {
+    var hint = TargetMatch.explainUnrecognizedLine(
+      "33TWN0838825201, 33TWN0838825211"
+    );
+    assert.match(hint, /кілька координат/);
+  });
+
+  test("координата з зайвою комою в кінці — підказує про зайві символи", function () {
+    var hint = TargetMatch.explainUnrecognizedLine("33TWN0838825201,");
+    assert.match(hint, /зайві символи/);
+  });
+
+  test("суцільний нерозпізнаваний текст — загальна підказка про формат", function () {
+    var hint = TargetMatch.explainUnrecognizedLine("якась дурня");
+    assert.match(hint, /не розпізнано/);
   });
 });

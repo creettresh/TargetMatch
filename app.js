@@ -119,11 +119,12 @@
     document.body.removeChild(area);
   }
 
-  function createCopyIconButton(text) {
+  function createCopyIconButton(text, labelText, badgeText) {
+    var title = labelText || "Копіювати";
     var button = document.createElement("button");
     button.type = "button";
     button.className = "link-accent link-icon icon-button";
-    button.title = "Копіювати";
+    button.title = title;
 
     var iconCopy = copyIconSvg("icon icon-copy");
     var iconCheck = checkIconSvg("icon icon-check");
@@ -131,10 +132,19 @@
 
     var label = document.createElement("span");
     label.className = "sr-only";
-    label.textContent = "Копіювати";
+    label.textContent = title;
 
     button.appendChild(iconCopy);
     button.appendChild(iconCheck);
+
+    if (badgeText) {
+      var badge = document.createElement("span");
+      badge.className = "copy-badge";
+      badge.textContent = badgeText;
+      badge.setAttribute("aria-hidden", "true");
+      button.appendChild(badge);
+    }
+
     button.appendChild(label);
 
     button.addEventListener("click", function () {
@@ -147,8 +157,8 @@
           setHidden(iconCheck, false);
         },
         function () {
-          label.textContent = "Копіювати";
-          button.title = "Копіювати";
+          label.textContent = title;
+          button.title = title;
           setHidden(iconCopy, false);
           setHidden(iconCheck, true);
         }
@@ -174,12 +184,15 @@
     var rowActions = document.createElement("span");
     rowActions.className = "row-actions";
 
-    // Копіюємо обчислене значення — протилежне до того, що ввели.
-    var copyValue =
-      converted.source === "latlon"
-        ? converted.mgrs
-        : converted.lat.toFixed(6) + ", " + converted.lon.toFixed(6);
-    rowActions.appendChild(createCopyIconButton(copyValue));
+    // Дві окремі кнопки — користувач сам обирає, що копіювати,
+    // замість неочевидного "копіюємо протилежний формат".
+    var wgsValue = converted.lat.toFixed(6) + ", " + converted.lon.toFixed(6);
+    rowActions.appendChild(
+      createCopyIconButton(converted.mgrs, "Копіювати MGRS", "MGRS")
+    );
+    rowActions.appendChild(
+      createCopyIconButton(wgsValue, "Копіювати WGS84", "WGS")
+    );
 
     var mapLink = document.createElement("a");
     mapLink.href = mapUrl(converted.lat, converted.lon);
@@ -195,6 +208,30 @@
     tr.appendChild(lonCell);
     tr.appendChild(actionsCell);
     return tr;
+  }
+
+  // --- Попередження під полями (спільне для точок інтересу й цілей) ---
+
+  // badDetails — масив {raw, error} з selectPoi()/findHits(). reasonFor
+  // дає змогу кожному викликачу самому вирішити, яку причину показати:
+  // POI показує heuristично кращу підказку (explainUnrecognizedLine),
+  // цілі — точну причину з convertOne() (INVALID_MGRS тощо).
+  function formatBadList(badDetails, reasonFor) {
+    return badDetails
+      .map(function (detail) {
+        return "«" + detail.raw + "» (" + reasonFor(detail) + ")";
+      })
+      .join("; ");
+  }
+
+  function setWarning(el, text) {
+    if (text) {
+      setHidden(el, false);
+      el.textContent = text;
+    } else {
+      setHidden(el, true);
+      el.textContent = "";
+    }
   }
 
   // --- Точки інтересу ---
@@ -217,12 +254,14 @@
     }
 
     var warningParts = [];
-    if (selection.badRaws.length) {
+    if (selection.badDetails.length) {
       warningParts.push(
         "Не вдалося розпізнати (" +
-          selection.badRaws.length +
+          selection.badDetails.length +
           "): " +
-          selection.badRaws.join("; ")
+          formatBadList(selection.badDetails, function (detail) {
+            return TargetMatch.explainUnrecognizedLine(detail.raw);
+          })
       );
     }
     if (selection.totalCount > TargetMatch.MAX_POI) {
@@ -234,13 +273,7 @@
           ")."
       );
     }
-    if (warningParts.length) {
-      setHidden(poiWarning, false);
-      poiWarning.textContent = warningParts.join(" ");
-    } else {
-      setHidden(poiWarning, true);
-      poiWarning.textContent = "";
-    }
+    setWarning(poiWarning, warningParts.join(" "));
 
     return selection.points;
   }
@@ -249,7 +282,7 @@
 
   function runCheck() {
     var points = renderPoi();
-    var targetRows = TargetMatch.parseLines(targetsInput.value);
+    var targetRows = TargetMatch.parseFreeform(targetsInput.value);
     var result = TargetMatch.findHits(points, targetRows, currentRadiusKm);
 
     hitsBody.textContent = "";
@@ -268,17 +301,24 @@
         : "Додайте хоча б одну точку інтересу.";
     }
 
-    if (result.badRaws.length) {
-      setHidden(targetsWarning, false);
-      targetsWarning.textContent =
-        "Не вдалося розпізнати (" + result.badRaws.length + "): " + result.badRaws.join("; ");
-    } else {
-      setHidden(targetsWarning, true);
-      targetsWarning.textContent = "";
-    }
+    var targetsMessage = result.badDetails.length
+      ? "Не вдалося розпізнати (" +
+        result.badDetails.length +
+        "): " +
+        formatBadList(result.badDetails, function (detail) {
+          return detail.error;
+        })
+      : "";
+    setWarning(targetsWarning, targetsMessage);
   }
 
   // --- Перемикач радіуса ---
+
+  // Перераховуємо влучання автоматично при зміні радіуса, але лише якщо
+  // користувач уже хоч раз натискав "Перевірити цілі" — інакше перемикання
+  // радіуса ДО першої перевірки показало б "Жодна ціль не потрапила" або
+  // "Додайте точку інтересу" замість нейтрального стартового плейсхолдера.
+  var hasChecked = false;
 
   for (var r = 0; r < radiusButtons.length; r++) {
     radiusButtons[r].addEventListener("click", function () {
@@ -287,8 +327,14 @@
       }
       this.classList.add("is-active");
       currentRadiusKm = parseFloat(this.getAttribute("data-radius"));
+      if (hasChecked) {
+        runCheck();
+      }
     });
   }
 
-  checkButton.addEventListener("click", runCheck);
+  checkButton.addEventListener("click", function () {
+    hasChecked = true;
+    runCheck();
+  });
 })();
