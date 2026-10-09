@@ -3,6 +3,7 @@
   var poiTableWrap = document.getElementById("poi-table-wrap");
   var poiBody = document.getElementById("poi-body");
   var poiPlaceholder = document.getElementById("poi-placeholder");
+  var poiCount = document.getElementById("poi-count");
   var poiWarning = document.getElementById("poi-warning");
   var radiusButtons = document.querySelectorAll(".radius-option");
 
@@ -12,6 +13,7 @@
   var hitsTableWrap = document.getElementById("hits-table-wrap");
   var hitsBody = document.getElementById("hits-body");
   var hitsPlaceholder = document.getElementById("hits-placeholder");
+  var hitsCount = document.getElementById("hits-count");
 
   var currentRadiusKm = 1;
 
@@ -248,9 +250,13 @@
     if (selection.points.length) {
       setHidden(poiTableWrap, false);
       setHidden(poiPlaceholder, true);
+      setHidden(poiCount, false);
+      poiCount.textContent = "Введено точок інтересу: " + selection.points.length;
     } else {
       setHidden(poiTableWrap, true);
       setHidden(poiPlaceholder, false);
+      setHidden(poiCount, true);
+      poiCount.textContent = "";
     }
 
     var warningParts = [];
@@ -293,9 +299,13 @@
     if (result.hits.length) {
       setHidden(hitsTableWrap, false);
       setHidden(hitsPlaceholder, true);
+      setHidden(hitsCount, false);
+      hitsCount.textContent = "Знайдено цілей: " + result.hits.length;
     } else {
       setHidden(hitsTableWrap, true);
       setHidden(hitsPlaceholder, false);
+      setHidden(hitsCount, true);
+      hitsCount.textContent = "";
       hitsPlaceholder.textContent = points.length
         ? "Жодна ціль не потрапила в радіус."
         : "Додайте хоча б одну точку інтересу.";

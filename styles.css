@@ -43,7 +43,7 @@ body {
 }
 
 .card {
-  width: min(880px, 100%);
+  width: min(1040px, 100%);
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -232,9 +232,16 @@ button.link-accent {
   color: var(--muted);
 }
 
+.result-count {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .batch {
   display: grid;
-  grid-template-columns: 1fr 1.3fr;
+  grid-template-columns: 6fr 5fr;
   gap: 8px 32px;
   align-items: start;
 }

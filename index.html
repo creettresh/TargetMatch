@@ -62,6 +62,8 @@
             Точки інтересу з'являться тут
           </p>
 
+          <p id="poi-count" class="result-count" hidden></p>
+
           <div id="poi-table-wrap" hidden>
             <table id="poi-table">
               <thead>
@@ -82,7 +84,7 @@
 
       <section class="batch">
         <div class="batch-form">
-          <label for="targets">Цілі противника</label>
+          <label for="targets">Цілі противника (без обмеження кількості)</label>
           <p class="field-hint">
             Тут гнучкіше: можна з підписами й будь-якими роздільниками —
             «Харків - (33TWN0838825205), Одеса - 46.482526, 30.723309» або
@@ -106,6 +108,8 @@
           <p id="hits-placeholder" class="placeholder">
             Тут з'являться цілі, що потрапили в радіус
           </p>
+
+          <p id="hits-count" class="result-count" hidden></p>
 
           <div id="hits-table-wrap" hidden>
             <table id="hits-table">
